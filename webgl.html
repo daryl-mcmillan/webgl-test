@@ -19,10 +19,10 @@
 			gl : gl,
 			createShader: function( type, script ) {
 				const shader = gl.createShader( type );
-				gl.shaderSource(shader, script);
-				gl.compileShader(shader);
-				if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-					throw new Error( "error in shader: " + gl.getShaderInfoLog(shader) );
+				gl.shaderSource( shader, script );
+				gl.compileShader( shader );
+				if( !gl.getShaderParameter( shader, gl.COMPILE_STATUS ) ) {
+					throw new Error( "error in shader: " + gl.getShaderInfoLog( shader ) );
 				}
 				return shader;
 			},
@@ -31,11 +31,32 @@
 				for( const shader of shaders ) {
 					gl.attachShader( shaderProgram, shader );
 				}
-				gl.linkProgram(shaderProgram);
-				if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-					throw new Error("Could not initialise shaders");
+				gl.linkProgram( shaderProgram );
+				if( !gl.getProgramParameter( shaderProgram, gl.LINK_STATUS ) ) {
+					throw new Error( "Could not initialise shaders" );
 				}
-				return shaderProgram;
+				const attributes = {};
+				const attributeCount = gl.getProgramParameter( shaderProgram, gl.ACTIVE_ATTRIBUTES );
+				for( var i = 0; i < attributeCount; i++ ) {
+					const attribute = gl.getActiveAttrib( shaderProgram, i );
+					const location = gl.getAttribLocation( shaderProgram, attribute.name );
+					attributes[attribute.name] = {
+						location: location,
+						enable: function() {
+							gl.enableVertexAttribArray(location);
+						}
+					};
+					console.log( attribute );
+				}
+				const uniformCount = gl.getProgramParameter( shaderProgram, gl.ACTIVE_UNIFORMS );
+				for( var i = 0; i < uniformCount; i++ ) {
+					const uniform = gl.getActiveUniform( shaderProgram, i );
+					uniform.location = gl.getUniformLocation( shaderProgram, uniform.name );
+					console.log( uniform );
+				}
+				return {
+					program: shaderProgram
+				};
 			}
 		};
 	}
@@ -141,26 +162,25 @@
 				}
 			`)
 		]);
-		helper.gl.useProgram(shaderProgram);
-		shaderProgram.vertexPositionAttribute = helper.gl.getAttribLocation(shaderProgram, "aVertexPosition");
-		helper.gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-		shaderProgram.vertexVelocityAttribute = helper.gl.getAttribLocation(shaderProgram, "aVertexVelocity");
-		helper.gl.enableVertexAttribArray(shaderProgram.vertexVelocityAttribute);
-		shaderProgram.startTimeAttribute = helper.gl.getAttribLocation(shaderProgram, "aStartTime");
-		helper.gl.enableVertexAttribArray(shaderProgram.startTimeAttribute);
+		helper.gl.useProgram(shaderProgram.program);
+		shaderProgram.program.vertexPositionAttribute = helper.gl.getAttribLocation(shaderProgram.program, "aVertexPosition");
+		helper.gl.enableVertexAttribArray(shaderProgram.program.vertexPositionAttribute);
+		shaderProgram.program.vertexVelocityAttribute = helper.gl.getAttribLocation(shaderProgram.program, "aVertexVelocity");
+		helper.gl.enableVertexAttribArray(shaderProgram.program.vertexVelocityAttribute);
+		shaderProgram.program.startTimeAttribute = helper.gl.getAttribLocation(shaderProgram.program, "aStartTime");
+		helper.gl.enableVertexAttribArray(shaderProgram.program.startTimeAttribute);
 
-		shaderProgram.pMatrixUniform = helper.gl.getUniformLocation(shaderProgram, "uPMatrix");
-		shaderProgram.mvMatrixUniform = helper.gl.getUniformLocation(shaderProgram, "uMVMatrix");
-		shaderProgram.timeUniform = helper.gl.getUniformLocation(shaderProgram, "uTime" );
+		shaderProgram.program.pMatrixUniform = helper.gl.getUniformLocation(shaderProgram.program, "uPMatrix");
+		shaderProgram.program.mvMatrixUniform = helper.gl.getUniformLocation(shaderProgram.program, "uMVMatrix");
+		shaderProgram.program.timeUniform = helper.gl.getUniformLocation(shaderProgram.program, "uTime" );
 
-		//var shaderProgram = initShaders(helper.gl);
 		initBuffers(helper.gl);
 
 		helper.gl.clearColor(1.0, 1.0, 1.0, 1.0);
 		helper.gl.enable(helper.gl.DEPTH_TEST);
 		
 		animate( timestamp => {
-			drawScene(helper.gl, shaderProgram, timestamp);
+			drawScene(helper.gl, shaderProgram.program, timestamp);
 		} );
 	}
 
