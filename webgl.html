@@ -5,99 +5,39 @@
 
 <body>
 <script src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/230211/glmatrix.min.js"></script>
-<script id="fragment" type="x-shader/x-fragment">
-    precision lowp float;
-
-	varying lowp vec3 vColor;
-
-	void main(void) {
-		gl_FragColor = vec4(vColor, 1.0);
-	}
-</script>
-
-<script id="vertex" type="x-shader/x-vertex">
-	attribute vec3 aVertexPosition;
-	attribute vec3 aVertexVelocity;
-	attribute float aStartTime;
-
-	uniform mat4 uMVMatrix;
-	uniform mat4 uPMatrix;
-	uniform float uTime;
-
-	varying lowp vec3 vColor;
-
-	void main(void) {
-		gl_Position = uPMatrix * uMVMatrix * ( vec4(aVertexPosition, 1.0) + vec4( (uTime-aStartTime) * aVertexVelocity, 0.0 ) );
-		vColor = vec3(1, 0, 0);
-	}
-</script>
+<script src="http://evanw.github.com/lightgl.js/lightgl.js"></script>
 
 <canvas id="view" style="border: none;" width="1000" height="800"></canvas>
 
 <script>
 
-	function initGL(canvas) {
-		var gl = canvas.getContext("webgl");
+	function glHelper( canvas ) {
+		const gl = canvas.getContext( "webgl" );
 		gl.viewportWidth = canvas.width;
 		gl.viewportHeight = canvas.height;
-		return gl;
-	}
-
-	function getShader(gl, scriptId) {
-
-		const shaderTypes = {
-			"x-shader/x-fragment": gl.FRAGMENT_SHADER,
-			"x-shader/x-vertex": gl.VERTEX_SHADER
+		return {
+			gl : gl,
+			createShader: function( type, script ) {
+				const shader = gl.createShader( type );
+				gl.shaderSource(shader, script);
+				gl.compileShader(shader);
+				if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+					throw new Error( "error in shader: " + gl.getShaderInfoLog(shader) );
+				}
+				return shader;
+			},
+			createProgram: function( shaders ) {
+				const shaderProgram = gl.createProgram();
+				for( const shader of shaders ) {
+					gl.attachShader( shaderProgram, shader );
+				}
+				gl.linkProgram(shaderProgram);
+				if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+					throw new Error("Could not initialise shaders");
+				}
+				return shaderProgram;
+			}
 		};
-
-		var shaderScript = document.getElementById(scriptId);
-		if (!shaderScript) {
-			throw new Error( "no shader script with id: " + scriptId );
-		}
-
-		var script = "";
-		var node = shaderScript.firstChild;
-		do {
-			script += node.textContent
-		} while( node = node.nextSibling )
-
-		var shader = gl.createShader( shaderTypes[ shaderScript.type ] );
-		gl.shaderSource(shader, script);
-		gl.compileShader(shader);
-
-		if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-			throw new Error( "error in shader: " + scriptId + "\n" + gl.getShaderInfoLog(shader) );
-		}
-
-		return shader;
-	}
-
-	function initShaders(gl) {
-		var fragmentShader = getShader(gl, "fragment");
-		var vertexShader = getShader(gl, "vertex");
-
-		var shaderProgram = gl.createProgram();
-		gl.attachShader(shaderProgram, vertexShader);
-		gl.attachShader(shaderProgram, fragmentShader);
-		gl.linkProgram(shaderProgram);
-
-		if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-			throw new Error("Could not initialise shaders");
-		}
-
-		gl.useProgram(shaderProgram);
-
-		shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-		gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-		shaderProgram.vertexVelocityAttribute = gl.getAttribLocation(shaderProgram, "aVertexVelocity");
-		gl.enableVertexAttribArray(shaderProgram.vertexVelocityAttribute);
-		shaderProgram.startTimeAttribute = gl.getAttribLocation(shaderProgram, "aStartTime");
-		gl.enableVertexAttribArray(shaderProgram.startTimeAttribute);
-
-		shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-		shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
-		shaderProgram.timeUniform = gl.getUniformLocation(shaderProgram, "uTime" );
-		return shaderProgram;
 	}
 
 	var triangleVertexPositionBuffer;
@@ -136,23 +76,21 @@
 		gl.uniform1f(shaderProgram.timeUniform, timestamp);
 
 		// set up a projection matrix
-		var pMatrix = mat4.create();
-		mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-		gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
+		const pMatrix = GL.Matrix.perspective( 45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0 ).transpose();
+		gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix.m);
 
-		var mvMatrix = mat4.create();
-		mat4.identity(mvMatrix);
-
-		mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
-		gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+		var mvMatrix = GL.Matrix.identity();
+		
+		mvMatrix = mvMatrix.multiply( GL.Matrix.translate(-1.5, 0.0, -7.0) );
+		gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix.transpose().m);
 		gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
 		gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
 		gl.vertexAttribPointer(shaderProgram.vertexVelocityAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
 		gl.vertexAttribPointer(shaderProgram.startTimeAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
 		gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
 
-		mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
-		gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+		mvMatrix = mvMatrix.multiply( GL.Matrix.translate(3.0, 0.0, 0.0) );
+		gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix.transpose().m);
 		gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
 		gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
 		gl.vertexAttribPointer(shaderProgram.vertexVelocityAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
@@ -175,15 +113,54 @@
 
 	function webGLStart() {
 		var canvas = document.getElementById("view");
-		var gl = initGL(canvas);
-		var shaderProgram = initShaders(gl);
-		initBuffers(gl);
+		var helper = glHelper( canvas );
+		const shaderProgram = helper.createProgram([
+			helper.createShader( helper.gl.VERTEX_SHADER, `
+				attribute vec3 aVertexPosition;
+				attribute vec3 aVertexVelocity;
+				attribute float aStartTime;
 
-		gl.clearColor(1.0, 1.0, 1.0, 1.0);
-		gl.enable(gl.DEPTH_TEST);
+				uniform mat4 uMVMatrix;
+				uniform mat4 uPMatrix;
+				uniform float uTime;
+
+				varying lowp vec3 vColor;
+
+				void main(void) {
+					gl_Position = uPMatrix * uMVMatrix * ( vec4(aVertexPosition, 1.0) + vec4( (uTime-aStartTime) * aVertexVelocity, 0.0 ) );
+					vColor = vec3(1, 0, 0);
+				}
+			`),
+			helper.createShader( helper.gl.FRAGMENT_SHADER, `
+				precision lowp float;
+
+				varying lowp vec3 vColor;
+
+				void main(void) {
+					gl_FragColor = vec4(vColor, 1.0);
+				}
+			`)
+		]);
+		helper.gl.useProgram(shaderProgram);
+		shaderProgram.vertexPositionAttribute = helper.gl.getAttribLocation(shaderProgram, "aVertexPosition");
+		helper.gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+		shaderProgram.vertexVelocityAttribute = helper.gl.getAttribLocation(shaderProgram, "aVertexVelocity");
+		helper.gl.enableVertexAttribArray(shaderProgram.vertexVelocityAttribute);
+		shaderProgram.startTimeAttribute = helper.gl.getAttribLocation(shaderProgram, "aStartTime");
+		helper.gl.enableVertexAttribArray(shaderProgram.startTimeAttribute);
+
+		shaderProgram.pMatrixUniform = helper.gl.getUniformLocation(shaderProgram, "uPMatrix");
+		shaderProgram.mvMatrixUniform = helper.gl.getUniformLocation(shaderProgram, "uMVMatrix");
+		shaderProgram.timeUniform = helper.gl.getUniformLocation(shaderProgram, "uTime" );
+
+		//var shaderProgram = initShaders(helper.gl);
+		initBuffers(helper.gl);
+
+		helper.gl.clearColor(1.0, 1.0, 1.0, 1.0);
+		helper.gl.enable(helper.gl.DEPTH_TEST);
 		
 		animate( timestamp => {
-			drawScene(gl, shaderProgram, timestamp);
+			drawScene(helper.gl, shaderProgram, timestamp);
 		} );
 	}
 
