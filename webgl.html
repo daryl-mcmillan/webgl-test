@@ -46,16 +46,20 @@
 							gl.enableVertexAttribArray(location);
 						}
 					};
-					console.log( attribute );
 				}
 				const uniformCount = gl.getProgramParameter( shaderProgram, gl.ACTIVE_UNIFORMS );
+				const uniforms = {};
 				for( var i = 0; i < uniformCount; i++ ) {
 					const uniform = gl.getActiveUniform( shaderProgram, i );
-					uniform.location = gl.getUniformLocation( shaderProgram, uniform.name );
-					console.log( uniform );
+					const location = gl.getUniformLocation( shaderProgram, uniform.name );
+					uniforms[uniform.name] = {
+						location: location
+					};
 				}
 				return {
-					program: shaderProgram
+					program: shaderProgram,
+					attributes: attributes,
+					uniforms: uniforms
 				};
 			}
 		};
@@ -92,30 +96,31 @@
 	function drawScene(gl, shaderProgram, timestamp) {
 		gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		gl.useProgram( shaderProgram.program );
 
 		// set current time
-		gl.uniform1f(shaderProgram.timeUniform, timestamp);
+		gl.uniform1f(shaderProgram.uniforms.uTime.location, timestamp);
 
 		// set up a projection matrix
 		const pMatrix = GL.Matrix.perspective( 45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0 ).transpose();
-		gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix.m);
+		gl.uniformMatrix4fv(shaderProgram.uniforms.uPMatrix.location, false, pMatrix.m);
 
 		var mvMatrix = GL.Matrix.identity();
 		
 		mvMatrix = mvMatrix.multiply( GL.Matrix.translate(-1.5, 0.0, -7.0) );
-		gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix.transpose().m);
+		gl.uniformMatrix4fv(shaderProgram.uniforms.uMVMatrix.location, false, mvMatrix.transpose().m);
 		gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-		gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
-		gl.vertexAttribPointer(shaderProgram.vertexVelocityAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
-		gl.vertexAttribPointer(shaderProgram.startTimeAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
+		gl.vertexAttribPointer(shaderProgram.attributes.aVertexPosition.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
+		gl.vertexAttribPointer(shaderProgram.attributes.aVertexVelocity.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
+		gl.vertexAttribPointer(shaderProgram.attributes.aStartTime.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
 		gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
 
 		mvMatrix = mvMatrix.multiply( GL.Matrix.translate(3.0, 0.0, 0.0) );
-		gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix.transpose().m);
+		gl.uniformMatrix4fv(shaderProgram.uniforms.uMVMatrix.location, false, mvMatrix.transpose().m);
 		gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-		gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
-		gl.vertexAttribPointer(shaderProgram.vertexVelocityAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
-		gl.vertexAttribPointer(shaderProgram.startTimeAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
+		gl.vertexAttribPointer(shaderProgram.attributes.aVertexPosition.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
+		gl.vertexAttribPointer(shaderProgram.attributes.aVertexVelocity.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
+		gl.vertexAttribPointer(shaderProgram.attributes.aStartTime.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
 		gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems);
 	}
 
@@ -162,17 +167,9 @@
 				}
 			`)
 		]);
-		helper.gl.useProgram(shaderProgram.program);
-		shaderProgram.program.vertexPositionAttribute = helper.gl.getAttribLocation(shaderProgram.program, "aVertexPosition");
-		helper.gl.enableVertexAttribArray(shaderProgram.program.vertexPositionAttribute);
-		shaderProgram.program.vertexVelocityAttribute = helper.gl.getAttribLocation(shaderProgram.program, "aVertexVelocity");
-		helper.gl.enableVertexAttribArray(shaderProgram.program.vertexVelocityAttribute);
-		shaderProgram.program.startTimeAttribute = helper.gl.getAttribLocation(shaderProgram.program, "aStartTime");
-		helper.gl.enableVertexAttribArray(shaderProgram.program.startTimeAttribute);
-
-		shaderProgram.program.pMatrixUniform = helper.gl.getUniformLocation(shaderProgram.program, "uPMatrix");
-		shaderProgram.program.mvMatrixUniform = helper.gl.getUniformLocation(shaderProgram.program, "uMVMatrix");
-		shaderProgram.program.timeUniform = helper.gl.getUniformLocation(shaderProgram.program, "uTime" );
+		shaderProgram.attributes.aVertexPosition.enable();
+		shaderProgram.attributes.aVertexVelocity.enable();
+		shaderProgram.attributes.aStartTime.enable();
 
 		initBuffers(helper.gl);
 
@@ -180,7 +177,7 @@
 		helper.gl.enable(helper.gl.DEPTH_TEST);
 		
 		animate( timestamp => {
-			drawScene(helper.gl, shaderProgram.program, timestamp);
+			drawScene(helper.gl, shaderProgram, timestamp);
 		} );
 	}
 
