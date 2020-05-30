@@ -17,21 +17,22 @@
 
 <script id="vertex" type="x-shader/x-vertex">
 	attribute vec3 aVertexPosition;
-	attribute vec3 aVertexTest;
+	attribute vec3 aVertexVelocity;
+	attribute float aStartTime;
 
 	uniform mat4 uMVMatrix;
 	uniform mat4 uPMatrix;
-	uniform float time;
+	uniform float uTime;
 
 	varying lowp vec3 vColor;
 
 	void main(void) {
-		gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0) + vec4(time * 0.001,0,0,0);
-		vColor = aVertexTest * time * 0.001;
+		gl_Position = uPMatrix * uMVMatrix * ( vec4(aVertexPosition, 1.0) + vec4( (uTime-aStartTime) * aVertexVelocity, 0.0 ) );
+		vColor = vec3(1, 0, 0);
 	}
 </script>
 
-<canvas id="view" style="border: none;" width="300" height="300"></canvas>
+<canvas id="view" style="border: none;" width="1000" height="800"></canvas>
 
 <script>
 
@@ -88,12 +89,14 @@
 
 		shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
 		gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-		shaderProgram.vertexTestAttribute = gl.getAttribLocation(shaderProgram, "aVertexTest");
-		gl.enableVertexAttribArray(shaderProgram.vertexTestAttribute);
+		shaderProgram.vertexVelocityAttribute = gl.getAttribLocation(shaderProgram, "aVertexVelocity");
+		gl.enableVertexAttribArray(shaderProgram.vertexVelocityAttribute);
+		shaderProgram.startTimeAttribute = gl.getAttribLocation(shaderProgram, "aStartTime");
+		gl.enableVertexAttribArray(shaderProgram.startTimeAttribute);
 
 		shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
 		shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
-		shaderProgram.timeUniform = gl.getUniformLocation(shaderProgram, "time" );
+		shaderProgram.timeUniform = gl.getUniformLocation(shaderProgram, "uTime" );
 		return shaderProgram;
 	}
 
@@ -104,9 +107,9 @@
 		triangleVertexPositionBuffer = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
 		var vertices = [
-			 0.0,  1.0,  0.0,          1, 0, 0,
-			-1.0, -1.0,  0.0,          0, 0, 1,
-			 1.0, -1.0,  0.0,          0, 1, 0,
+			 0.0,  1.0,  0.0,    0.01, 0, 0, 0,
+			-1.0, -1.0,  0.0,    0.01, 0, 0, 0,
+			 1.0, -1.0,  0.0,    0.01, 0, 0, 0,
 		];
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 		triangleVertexPositionBuffer.itemSize = 3;
@@ -115,10 +118,10 @@
 		squareVertexPositionBuffer = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
 		vertices = [
-			 1.0,  1.0,  0.0, 1,0,0,
-			-1.0,  1.0,  0.0, 0,0,1,
-			 1.0, -1.0,  0.0, 0,1,0,
-			-1.0, -1.0,  0.0, 1,0,1
+			 1.0,  1.0,  0.0,    0,0.01,0, 0,
+			-1.0,  1.0,  0.0,    0,0.01,0, 0,
+			 1.0, -1.0,  0.0,    0,0.01,0, 0,
+			-1.0, -1.0,  0.0,    0,0.01,0, 0,
 		];
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 		squareVertexPositionBuffer.itemSize = 3;
@@ -143,15 +146,17 @@
 		mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
 		gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
 		gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-		gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 24, 0);
-		gl.vertexAttribPointer(shaderProgram.vertexTestAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 24, 12);
+		gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
+		gl.vertexAttribPointer(shaderProgram.vertexVelocityAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
+		gl.vertexAttribPointer(shaderProgram.startTimeAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
 		gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
 
 		mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
 		gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
 		gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-		gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 24, 0);
-		gl.vertexAttribPointer(shaderProgram.vertexTestAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 24, 12);
+		gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
+		gl.vertexAttribPointer(shaderProgram.vertexVelocityAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
+		gl.vertexAttribPointer(shaderProgram.startTimeAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
 		gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems);
 	}
 
