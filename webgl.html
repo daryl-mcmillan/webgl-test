@@ -59,44 +59,55 @@
 				return {
 					program: shaderProgram,
 					attributes: attributes,
-					uniforms: uniforms
+					uniforms: uniforms,
+					use: function() {
+						gl.useProgram( shaderProgram );
+					}
 				};
 			}
 		};
 	}
 
-	var triangleVertexPositionBuffer;
-	var squareVertexPositionBuffer;
+	var vertexPositionBuffer;
 
 	function initBuffers(gl) {
-		triangleVertexPositionBuffer = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-		var vertices = [
-			 0.0,  1.0,  0.0,    0.01, 0, 0, 0,
-			-1.0, -1.0,  0.0,    0.01, 0, 0, 0,
-			 1.0, -1.0,  0.0,    0.01, 0, 0, 0,
-		];
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-		triangleVertexPositionBuffer.itemSize = 3;
-		triangleVertexPositionBuffer.numItems = 3;
+		vertexPositionBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+		vertices = [];
+		var count = 0;
+		
+		for( var i=0; i<1000000; i++ ) {
+			var x = 0;
+			var y = 0;
+			var v = ( Math.random() ) * 0.001 + 0.0005;
+			var theta = Math.random() * 2 * Math.PI;
+			var latitude = Math.random() * 2.0 - 1.0;
+			var vx = Math.sqrt( 1 - latitude * latitude ) * Math.cos( theta ) * v;
+			var vy = Math.sqrt( 1 - latitude * latitude ) * Math.sin( theta ) * v;
+			var vz = latitude * v;
 
-		squareVertexPositionBuffer = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-		vertices = [
-			 1.0,  1.0,  0.0,    0,0.01,0, 0,
-			-1.0,  1.0,  0.0,    0,0.01,0, 0,
-			 1.0, -1.0,  0.0,    0,0.01,0, 0,
-			-1.0, -1.0,  0.0,    0,0.01,0, 0,
-		];
+			vertices.push( x, y, 0 );
+			vertices.push( vx, vy, vz );
+			vertices.push( 0 );
+
+			vertices.push( x, y+0.01, 0 );
+			vertices.push( vx, vy, vz );
+			vertices.push( 0 );
+
+			vertices.push( x+0.01, y, 0 );
+			vertices.push( vx, vy, vz );
+			vertices.push( 0 );
+			count += 3;
+		}
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-		squareVertexPositionBuffer.itemSize = 3;
-		squareVertexPositionBuffer.numItems = 4;
+		vertexPositionBuffer.numItems = count;
+		vertexPositionBuffer.drawType = gl.TRIANGLES;
 	}
-
+	
 	function drawScene(gl, shaderProgram, timestamp) {
 		gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-		gl.useProgram( shaderProgram.program );
+		shaderProgram.use();
 
 		// set current time
 		gl.uniform1f(shaderProgram.uniforms.uTime.location, timestamp);
@@ -105,23 +116,14 @@
 		const pMatrix = GL.Matrix.perspective( 45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0 ).transpose();
 		gl.uniformMatrix4fv(shaderProgram.uniforms.uPMatrix.location, false, pMatrix.m);
 
-		var mvMatrix = GL.Matrix.identity();
-		
-		mvMatrix = mvMatrix.multiply( GL.Matrix.translate(-1.5, 0.0, -7.0) );
+		var mvMatrix = GL.Matrix.translate(0.0, 0.0, -7.0);
 		gl.uniformMatrix4fv(shaderProgram.uniforms.uMVMatrix.location, false, mvMatrix.transpose().m);
-		gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-		gl.vertexAttribPointer(shaderProgram.attributes.aVertexPosition.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
-		gl.vertexAttribPointer(shaderProgram.attributes.aVertexVelocity.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
-		gl.vertexAttribPointer(shaderProgram.attributes.aStartTime.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
-		gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
 
-		mvMatrix = mvMatrix.multiply( GL.Matrix.translate(3.0, 0.0, 0.0) );
-		gl.uniformMatrix4fv(shaderProgram.uniforms.uMVMatrix.location, false, mvMatrix.transpose().m);
-		gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-		gl.vertexAttribPointer(shaderProgram.attributes.aVertexPosition.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 0);
-		gl.vertexAttribPointer(shaderProgram.attributes.aVertexVelocity.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 3);
-		gl.vertexAttribPointer(shaderProgram.attributes.aStartTime.location, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 4 * 7, 4 * 6);
-		gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems);
+		gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+		gl.vertexAttribPointer(shaderProgram.attributes.aVertexPosition.location, 3, gl.FLOAT, false, 4 * 7, 0);
+		gl.vertexAttribPointer(shaderProgram.attributes.aVertexVelocity.location, 3, gl.FLOAT, false, 4 * 7, 4 * 3);
+		gl.vertexAttribPointer(shaderProgram.attributes.aStartTime.location, 1, gl.FLOAT, false, 4 * 7, 4 * 6);
+		gl.drawArrays(vertexPositionBuffer.drawType, 0, vertexPositionBuffer.numItems);
 	}
 
 	function animate( drawFunc ) {
@@ -140,6 +142,7 @@
 	function webGLStart() {
 		var canvas = document.getElementById("view");
 		var helper = glHelper( canvas );
+
 		const shaderProgram = helper.createProgram([
 			helper.createShader( helper.gl.VERTEX_SHADER, `
 				attribute vec3 aVertexPosition;
@@ -167,6 +170,7 @@
 				}
 			`)
 		]);
+
 		shaderProgram.attributes.aVertexPosition.enable();
 		shaderProgram.attributes.aVertexVelocity.enable();
 		shaderProgram.attributes.aStartTime.enable();
@@ -175,7 +179,7 @@
 
 		helper.gl.clearColor(1.0, 1.0, 1.0, 1.0);
 		helper.gl.enable(helper.gl.DEPTH_TEST);
-		
+
 		animate( timestamp => {
 			drawScene(helper.gl, shaderProgram, timestamp);
 		} );
