@@ -35,48 +35,29 @@
 				if( !gl.getProgramParameter( shaderProgram, gl.LINK_STATUS ) ) {
 					throw new Error( "Could not initialise shaders" );
 				}
-				const attributes = {};
-				const attributeCount = gl.getProgramParameter( shaderProgram, gl.ACTIVE_ATTRIBUTES );
-				for( var i = 0; i < attributeCount; i++ ) {
-					const attribute = gl.getActiveAttrib( shaderProgram, i );
-					const location = gl.getAttribLocation( shaderProgram, attribute.name );
-					attributes[attribute.name] = {
-						location: location,
-						enable: function() {
-							gl.enableVertexAttribArray(location);
-						}
-					};
-				}
-				const uniformCount = gl.getProgramParameter( shaderProgram, gl.ACTIVE_UNIFORMS );
-				const uniforms = {};
-				for( var i = 0; i < uniformCount; i++ ) {
-					const uniform = gl.getActiveUniform( shaderProgram, i );
-					const location = gl.getUniformLocation( shaderProgram, uniform.name );
-					uniforms[uniform.name] = {
-						location: location
-					};
-				}
 				return {
 					program: shaderProgram,
-					attributes: attributes,
-					uniforms: uniforms,
 					use: function() {
 						gl.useProgram( shaderProgram );
+					},
+          getAttribLocation: function( name ) {
+						return gl.getAttribLocation( shaderProgram, name );
+					},
+					getUniformLocation: function( name ) {
+						return gl.getUniformLocation( shaderProgram, name );
 					}
 				};
 			}
 		};
 	}
 
-	var vertexPositionBuffer;
-
 	function initBuffers(gl) {
-		vertexPositionBuffer = gl.createBuffer();
+		const vertexPositionBuffer = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
 		vertices = [];
 		var count = 0;
 		
-		for( var i=0; i<1000000; i++ ) {
+		for( var i=0; i<50000; i++ ) {
 			var x = 0;
 			var y = 0;
 			var v = ( Math.random() ) * 0.001 + 0.0005;
@@ -90,11 +71,11 @@
 			vertices.push( vx, vy, vz );
 			vertices.push( 0 );
 
-			vertices.push( x, y+0.01, 0 );
+			vertices.push( x+0.01, y, 0 );
 			vertices.push( vx, vy, vz );
 			vertices.push( 0 );
 
-			vertices.push( x+0.01, y, 0 );
+			vertices.push( x, y+0.01, 0 );
 			vertices.push( vx, vy, vz );
 			vertices.push( 0 );
 			count += 3;
@@ -102,28 +83,29 @@
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 		vertexPositionBuffer.numItems = count;
 		vertexPositionBuffer.drawType = gl.TRIANGLES;
+		return vertexPositionBuffer;
 	}
 	
-	function drawScene(gl, shaderProgram, timestamp) {
+	function drawScene(gl, shaderProgram, buffer, timestamp) {
 		gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 		shaderProgram.use();
 
 		// set current time
-		gl.uniform1f(shaderProgram.uniforms.uTime.location, timestamp);
+		gl.uniform1f(shaderProgram.getUniformLocation("uTime"), timestamp);
 
 		// set up a projection matrix
 		const pMatrix = GL.Matrix.perspective( 45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0 ).transpose();
-		gl.uniformMatrix4fv(shaderProgram.uniforms.uPMatrix.location, false, pMatrix.m);
+		gl.uniformMatrix4fv(shaderProgram.getUniformLocation("uPMatrix"), false, pMatrix.m);
 
 		var mvMatrix = GL.Matrix.translate(0.0, 0.0, -7.0);
-		gl.uniformMatrix4fv(shaderProgram.uniforms.uMVMatrix.location, false, mvMatrix.transpose().m);
+		gl.uniformMatrix4fv(shaderProgram.getUniformLocation("uMVMatrix"), false, mvMatrix.transpose().m);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
-		gl.vertexAttribPointer(shaderProgram.attributes.aVertexPosition.location, 3, gl.FLOAT, false, 4 * 7, 0);
-		gl.vertexAttribPointer(shaderProgram.attributes.aVertexVelocity.location, 3, gl.FLOAT, false, 4 * 7, 4 * 3);
-		gl.vertexAttribPointer(shaderProgram.attributes.aStartTime.location, 1, gl.FLOAT, false, 4 * 7, 4 * 6);
-		gl.drawArrays(vertexPositionBuffer.drawType, 0, vertexPositionBuffer.numItems);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aVertexPosition"), 3, gl.FLOAT, false, 4 * 7, 0);
+		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aVertexVelocity"), 3, gl.FLOAT, false, 4 * 7, 4 * 3);
+		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aStartTime"), 1, gl.FLOAT, false, 4 * 7, 4 * 6);
+		gl.drawArrays(buffer.drawType, 0, buffer.numItems);
 	}
 
 	function animate( drawFunc ) {
@@ -171,17 +153,19 @@
 			`)
 		]);
 
-		shaderProgram.attributes.aVertexPosition.enable();
-		shaderProgram.attributes.aVertexVelocity.enable();
-		shaderProgram.attributes.aStartTime.enable();
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aVertexPosition"));
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aVertexVelocity"));
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aStartTime"));
 
-		initBuffers(helper.gl);
+		const buffer = initBuffers(helper.gl);
 
 		helper.gl.clearColor(1.0, 1.0, 1.0, 1.0);
 		helper.gl.enable(helper.gl.DEPTH_TEST);
+    helper.gl.enable(helper.gl.CULL_FACE);
+    helper.gl.cullFace(helper.gl.BACK);
 
 		animate( timestamp => {
-			drawScene(helper.gl, shaderProgram, timestamp);
+			drawScene(helper.gl, shaderProgram, buffer, timestamp);
 		} );
 	}
 
