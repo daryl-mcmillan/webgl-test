@@ -4,7 +4,6 @@
 </head>
 
 <body>
-<script src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/230211/glmatrix.min.js"></script>
 <script src="http://evanw.github.com/lightgl.js/lightgl.js"></script>
 
 <canvas id="view" style="border: none;" width="1000" height="800"></canvas>
@@ -85,7 +84,7 @@
 		vertexPositionBuffer.drawType = gl.TRIANGLES;
 		return vertexPositionBuffer;
 	}
-	
+
 	function drawScene(gl, shaderProgram, buffer, timestamp) {
 		gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -98,8 +97,8 @@
 		const pMatrix = GL.Matrix.perspective( 45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0 ).transpose();
 		gl.uniformMatrix4fv(shaderProgram.getUniformLocation("uPMatrix"), false, pMatrix.m);
 
-		var mvMatrix = GL.Matrix.translate(0.0, 0.0, -7.0);
-		gl.uniformMatrix4fv(shaderProgram.getUniformLocation("uMVMatrix"), false, mvMatrix.transpose().m);
+		const mvMatrix = GL.Matrix.translate( 0, 0, -7 ).transpose();
+		gl.uniformMatrix4fv(shaderProgram.getUniformLocation("uMVMatrix"), false, mvMatrix.m);
 
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aVertexPosition"), 3, gl.FLOAT, false, 4 * 7, 0);
