@@ -6,6 +6,7 @@
 <body>
 <script src="http://evanw.github.com/lightgl.js/lightgl.js"></script>
 
+<img src="DATA:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAtSURBVDhPY/iPCt7KqKAhqAQMDAsNaNIE0cjUAA0tGECTBiKoBAwMfQ3//wMAGtniUB6clGEAAAAASUVORK5CYII=" id="icon" hidden />
 <canvas id="view" style="border: none;" width="1000" height="800"></canvas>
 
 <script>
@@ -69,29 +70,33 @@
 			vertices.push( x, y, 0 );
 			vertices.push( vx, vy, vz );
 			vertices.push( 0 );
-
-			vertices.push( x+0.01, y, 0 );
-			vertices.push( vx, vy, vz );
-			vertices.push( 0 );
-
-			vertices.push( x, y+0.01, 0 );
-			vertices.push( vx, vy, vz );
-			vertices.push( 0 );
-			count += 3;
+			count += 1;
 		}
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 		vertexPositionBuffer.numItems = count;
-		vertexPositionBuffer.drawType = gl.TRIANGLES;
+		vertexPositionBuffer.drawType = gl.POINTS;
 		return vertexPositionBuffer;
 	}
 
-	function drawScene(gl, shaderProgram, buffer, timestamp) {
+	function loadTexture(gl, data) {
+		const index = 0;
+		const glTexture = gl.createTexture();
+		gl.activeTexture(gl.TEXTURE0 + index);
+		gl.bindTexture(gl.TEXTURE_2D, glTexture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, data);
+		gl.generateMipmap(gl.TEXTURE_2D);
+		return index;
+	}
+
+	function drawScene(gl, shaderProgram, buffer, timestamp, texture) {
 		gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 		shaderProgram.use();
 
 		// set current time
 		gl.uniform1f(shaderProgram.getUniformLocation("uTime"), timestamp);
+		// set current texture
+		gl.uniform1i(shaderProgram.getUniformLocation("texture"), texture);
 
 		// set up a projection matrix
 		const pMatrix = GL.Matrix.perspective( 45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0 ).transpose();
@@ -138,16 +143,18 @@
 
 				void main(void) {
 					gl_Position = uPMatrix * uMVMatrix * ( vec4(aVertexPosition, 1.0) + vec4( (uTime-aStartTime) * aVertexVelocity, 0.0 ) );
+					gl_PointSize = 10.0 / gl_Position.w;
 					vColor = vec3(1, 0, 0);
 				}
 			`),
 			helper.createShader( helper.gl.FRAGMENT_SHADER, `
 				precision lowp float;
+				uniform sampler2D texture;
 
 				varying lowp vec3 vColor;
 
 				void main(void) {
-					gl_FragColor = vec4(vColor, 1.0);
+					gl_FragColor = texture2D(texture, gl_PointCoord); // vec4(vColor, 1.0);
 				}
 			`)
 		]);
@@ -158,13 +165,16 @@
 
 		const buffer = initBuffers(helper.gl);
 
+		const icon = document.getElementById('icon');  // get the <img> tag
+		const texture = loadTexture(helper.gl, icon);
+
 		helper.gl.clearColor(1.0, 1.0, 1.0, 1.0);
 		helper.gl.enable(helper.gl.DEPTH_TEST);
-    helper.gl.enable(helper.gl.CULL_FACE);
-    helper.gl.cullFace(helper.gl.BACK);
+		helper.gl.enable(helper.gl.CULL_FACE);
+		helper.gl.cullFace(helper.gl.BACK);
 
 		animate( timestamp => {
-			drawScene(helper.gl, shaderProgram, buffer, timestamp);
+			drawScene(helper.gl, shaderProgram, buffer, timestamp, texture);
 		} );
 	}
 
