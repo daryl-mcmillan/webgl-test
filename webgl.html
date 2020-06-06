@@ -70,30 +70,39 @@
 	}
 
 	function initBuffers(gl) {
-		const vertexPositionBuffer = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+		const buffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 		vertices = [];
 		var count = 0;
 		
-		for( var i=0; i<50000; i++ ) {
-			var x = 0;
-			var y = 0;
-			var v = ( Math.random() ) * 0.001 + 0.0005;
-			var theta = Math.random() * 2 * Math.PI;
-			var latitude = Math.random() * 2.0 - 1.0;
-			var vx = Math.sqrt( 1 - latitude * latitude ) * Math.cos( theta ) * v;
-			var vy = Math.sqrt( 1 - latitude * latitude ) * Math.sin( theta ) * v;
-			var vz = latitude * v;
-
-			vertices.push( x, y, 0 );
-			vertices.push( vx, vy, vz );
-			vertices.push( 0 );
+		for( var i=0; i<100000; i++ ) {
+			// start
+			vertices.push(
+				-2.0 - Math.random(),
+				Math.random() * 4.0 - 2.0
+			);
+			// end
+			vertices.push(
+				2.0 + Math.random(),
+				Math.random() * 4.0 - 2.0
+			);
+			// startT
+			vertices.push( 0.25 );
+			// deltaT
+			vertices.push( 5.0 );
 			count += 1;
 		}
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-		vertexPositionBuffer.numItems = count;
-		vertexPositionBuffer.drawType = gl.POINTS;
-		return vertexPositionBuffer;
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.DYNAMIC_DRAW);
+		const recordSize = 6 * 4;
+		buffer.draw = function( shader ) {
+			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+			gl.vertexAttribPointer(shader.getAttribLocation("aVertexStart"), 2, gl.FLOAT, false, recordSize, 0);
+			gl.vertexAttribPointer(shader.getAttribLocation("aVertexEnd"), 2, gl.FLOAT, false, recordSize, 4 * 2);
+			gl.vertexAttribPointer(shader.getAttribLocation("aStartT"), 1, gl.FLOAT, false, recordSize, 4 * 4);
+			gl.vertexAttribPointer(shader.getAttribLocation("aDeltaT"), 1, gl.FLOAT, false, recordSize, 4 * 5);
+			gl.drawArrays(gl.POINTS, 0, count);
+		};
+		return buffer;
 	}
 
 	function loadTexture(gl, data) {
@@ -112,7 +121,7 @@
 		shaderProgram.use();
 
 		// set current time
-		gl.uniform1f(shaderProgram.getUniformLocation("uTime"), timestamp);
+		gl.uniform1f(shaderProgram.getUniformLocation("uTime"), timestamp/1000);
 		// set current texture
 		gl.uniform1i(shaderProgram.getUniformLocation("texture"), texture);
 
@@ -123,11 +132,7 @@
 		const mvMatrix = GL.Matrix.translate( 0, 0, -7 ).transpose();
 		gl.uniformMatrix4fv(shaderProgram.getUniformLocation("uMVMatrix"), false, mvMatrix.m);
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aVertexPosition"), 3, gl.FLOAT, false, 4 * 7, 0);
-		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aVertexVelocity"), 3, gl.FLOAT, false, 4 * 7, 4 * 3);
-		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aStartTime"), 1, gl.FLOAT, false, 4 * 7, 4 * 6);
-		gl.drawArrays(buffer.drawType, 0, buffer.numItems);
+		buffer.draw( shaderProgram );
 	}
 
 	function animate( drawFunc ) {
@@ -150,9 +155,10 @@
 
 		const shaderProgram = helper.createProgram([
 			helper.createShader( helper.gl.VERTEX_SHADER, `
-				attribute vec3 aVertexPosition;
-				attribute vec3 aVertexVelocity;
-				attribute float aStartTime;
+				attribute vec2 aVertexStart;
+				attribute vec2 aVertexEnd;
+				attribute float aStartT;
+				attribute float aDeltaT;
 
 				uniform mat4 uMVMatrix;
 				uniform mat4 uPMatrix;
@@ -161,8 +167,10 @@
 				varying lowp vec3 vColor;
 
 				void main(void) {
-					gl_Position = uPMatrix * uMVMatrix * ( vec4(aVertexPosition, 1.0) + vec4( (uTime-aStartTime) * aVertexVelocity, 0.0 ) );
-					gl_PointSize = 10.0 / gl_Position.w;
+					float progress = clamp( ( uTime - aStartT ) / aDeltaT, 0.0, 1.0 );
+					vec2 position = mix( aVertexStart, aVertexEnd, progress );
+					gl_Position = uPMatrix * uMVMatrix * vec4( position, 0.0, 1.0 );
+					gl_PointSize = 10.0 / gl_Position.w * aStartT;
 					vColor = vec3(1, 0, 0);
 				}
 			`),
@@ -173,14 +181,16 @@
 				varying lowp vec3 vColor;
 
 				void main(void) {
-					gl_FragColor = texture2D(texture, gl_PointCoord); // vec4(vColor, 1.0);
+					//gl_FragColor = texture2D(texture, gl_PointCoord);
+					gl_FragColor = vec4(vColor, 1.0);
 				}
 			`)
 		]);
 
-		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aVertexPosition"));
-		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aVertexVelocity"));
-		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aStartTime"));
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aVertexStart"));
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aVertexEnd"));
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aStartT"));
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aDeltaT"));
 
 		const buffer = initBuffers(helper.gl);
 
