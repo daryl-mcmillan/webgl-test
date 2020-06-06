@@ -11,6 +11,24 @@
 
 <script>
 
+	function fullscreen(gl, canvas) {
+		document.body.style.padding = "0px";
+		document.body.style.margin = "0px";
+		document.body.style.overflow = "hidden";
+		canvas.style.position = "absolute";
+		canvas.style.border = "none";
+		canvas.style.left = "0px;"
+		canvas.style.top = "0px;"
+		const resize = function() {
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight;
+			gl.viewportWidth = canvas.width;
+			gl.viewportHeight = canvas.height;
+		};
+		resize();
+		window.addEventListener('resize', resize);
+	}
+
 	function glHelper( canvas ) {
 		const gl = canvas.getContext( "webgl" );
 		gl.viewportWidth = canvas.width;
@@ -128,6 +146,7 @@
 	function webGLStart() {
 		var canvas = document.getElementById("view");
 		var helper = glHelper( canvas );
+		fullscreen(helper.gl, canvas);
 
 		const shaderProgram = helper.createProgram([
 			helper.createShader( helper.gl.VERTEX_SHADER, `
