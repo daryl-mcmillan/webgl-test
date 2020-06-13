@@ -1,0 +1,192 @@
+<html>
+<head>
+<title>test</title>
+</head>
+
+<body style="padding: 0px; overflow: hidden;">
+<script src="http://evanw.github.com/lightgl.js/lightgl.js"></script>
+
+<img src="DATA:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAtSURBVDhPY/iPCt7KqKAhqAQMDAsNaNIE0cjUAA0tGECTBiKoBAwMfQ3//wMAGtniUB6clGEAAAAASUVORK5CYII=" id="icon" hidden />
+<canvas id="view" style="border: none; position: absolute; left: 0px; top: 0px;" width="1000" height="800"></canvas>
+
+<script>
+
+	function glHelper( canvas ) {
+		const gl = canvas.getContext( "webgl" );
+		gl.viewportWidth = canvas.width;
+		gl.viewportHeight = canvas.height;
+		return {
+			gl : gl,
+			createShader: function( type, script ) {
+				const shader = gl.createShader( type );
+				gl.shaderSource( shader, script );
+				gl.compileShader( shader );
+				if( !gl.getShaderParameter( shader, gl.COMPILE_STATUS ) ) {
+					throw new Error( "error in shader: " + gl.getShaderInfoLog( shader ) );
+				}
+				return shader;
+			},
+			createProgram: function( shaders ) {
+				const shaderProgram = gl.createProgram();
+				for( const shader of shaders ) {
+					gl.attachShader( shaderProgram, shader );
+				}
+				gl.linkProgram( shaderProgram );
+				if( !gl.getProgramParameter( shaderProgram, gl.LINK_STATUS ) ) {
+					throw new Error( "Could not initialise shaders" );
+				}
+				return {
+					program: shaderProgram,
+					use: function() {
+						gl.useProgram( shaderProgram );
+					},
+          getAttribLocation: function( name ) {
+						return gl.getAttribLocation( shaderProgram, name );
+					},
+					getUniformLocation: function( name ) {
+						return gl.getUniformLocation( shaderProgram, name );
+					}
+				};
+			},
+			resize: function(width, height) {
+				canvas.width = width;
+				canvas.height = height;
+				gl.viewportWidth = width;
+				gl.viewportHeight = height;
+			}
+		};
+	}
+
+	function initBuffers(gl) {
+		const vertexPositionBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer);
+		vertices = [];
+		var count = 0;
+
+		vertices.push( -30, -20, 0 );
+		vertices.push( 1, 0 );
+
+		vertices.push( 30, 0, 0 );
+		vertices.push( 0, 1 );
+
+		vertices.push( 0, 20, 0 );
+		vertices.push( 1, 1 );
+
+		count += 3;
+
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+		vertexPositionBuffer.numItems = count;
+		vertexPositionBuffer.drawType = gl.TRIANGLES;
+		return vertexPositionBuffer;
+	}
+
+	function loadTexture(gl, data) {
+		const index = 0;
+		const glTexture = gl.createTexture();
+		gl.activeTexture(gl.TEXTURE0 + index);
+		gl.bindTexture(gl.TEXTURE_2D, glTexture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, data);
+		gl.generateMipmap(gl.TEXTURE_2D);
+		return index;
+	}
+
+	function drawScene(gl, shaderProgram, buffer, timestamp, texture) {
+		gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		shaderProgram.use();
+
+		// set current time
+		gl.uniform1f(shaderProgram.getUniformLocation("uTime"), timestamp);
+		// set current texture
+		gl.uniform1i(shaderProgram.getUniformLocation("texture"), texture);
+
+		// set up a projection matrix
+		const perspective = GL.Matrix.perspective( 45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0 );
+		const move = GL.Matrix.translate( 2, 2, 0 );
+		const spin = GL.Matrix.rotate( timestamp/100, 0, 0, 1 );
+		const stepback = GL.Matrix.translate( 0, 10, -7 );
+		const tilt = GL.Matrix.rotate( -60, 1, 0, 0 );
+		const cameraMatrix = perspective.multiply(tilt).multiply(stepback).multiply(spin).multiply(move).transpose();
+		gl.uniformMatrix4fv(shaderProgram.getUniformLocation("uCameraMatrix"), false, cameraMatrix.m);
+
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aVertexPosition"), 3, gl.FLOAT, false, 4 * 5, 0);
+		gl.vertexAttribPointer(shaderProgram.getAttribLocation("aVertexTextureCoord"), 2, gl.FLOAT, false, 4 * 5, 4*3);
+		gl.drawArrays(buffer.drawType, 0, buffer.numItems);
+	}
+
+	function animate( drawFunc ) {
+		var initialTime = 0;
+		var repeat = function( timestamp ) {
+			drawFunc( timestamp - initialTime );
+			requestAnimationFrame( repeat );
+		};
+		requestAnimationFrame( ( timestamp ) => {
+			drawFunc( 0 );
+			initialTime = timestamp;
+			requestAnimationFrame( repeat );
+		} );
+	}
+
+	function webGLStart() {
+		var canvas = document.getElementById("view");
+		var helper = glHelper( canvas );
+		helper.resize(window.innerWidth, window.innerHeight);
+		window.addEventListener('resize', () => {
+			helper.resize(window.innerWidth, window.innerHeight);
+		});
+		const shaderProgram = helper.createProgram([
+			helper.createShader( helper.gl.VERTEX_SHADER, `
+				attribute vec3 aVertexPosition;
+				attribute vec2 aVertexTextureCoord;
+
+				uniform mat4 uCameraMatrix;
+				uniform float uTime;
+
+				varying lowp vec2 texCoords;
+
+				void main(void) {
+					gl_Position = /*uPMatrix * uMVMatrix*/ uCameraMatrix * ( vec4(aVertexPosition, 1.0) );
+					//vColor = vec3(1, 0, 0);
+					texCoords = aVertexTextureCoord;
+				}
+			`),
+			helper.createShader( helper.gl.FRAGMENT_SHADER, `
+				precision lowp float;
+				uniform sampler2D texture;
+
+				varying lowp vec2 texCoords;
+
+				void main(void) {
+					gl_FragColor = texture2D( texture, vec2( mod(texCoords.x * 10.0, 1.0), mod(texCoords.y * 10.0, 1.0) ) );
+					//gl_FragColor = texture2D(texture, texCoords);
+					//gl_FragColor = vec4( mod(texCoords.x*10.0,1.0), 0.0, 0.0, 1.0 );
+					//gl_FragColor = vec4( texCoords, 0.0, 1.0 );
+					//gl_FragColor = vec4( vColor, 1.0 );
+					//gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0) ; //texture2D(texture, gl_PointCoord); // vec4(vColor, 1.0);
+				}
+			`)
+		]);
+
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aVertexPosition"));
+		helper.gl.enableVertexAttribArray(shaderProgram.getAttribLocation("aVertexTextureCoord"));
+
+		const buffer = initBuffers(helper.gl);
+
+		const icon = document.getElementById('icon');  // get the <img> tag
+		const texture = loadTexture(helper.gl, icon);
+
+		helper.gl.clearColor(1.0, 1.0, 1.0, 1.0);
+		helper.gl.enable(helper.gl.DEPTH_TEST);
+		helper.gl.enable(helper.gl.CULL_FACE);
+		helper.gl.cullFace(helper.gl.BACK);
+
+		animate( timestamp => {
+			drawScene(helper.gl, shaderProgram, buffer, timestamp, texture);
+		} );
+	}
+
+	webGLStart()
+</script>
+</body>
+</html>
